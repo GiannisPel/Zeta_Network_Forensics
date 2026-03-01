@@ -130,18 +130,18 @@ SQLite with JSON extensions enables:
 
 # 5. Installation & Setup
 
-  Server Side
+  Server Side:
 
-  1. Install TShark
-  2. Install dependencies:
-     pip install -r server/requirements_server.txt
-  3. Run the FastAPI server:
-     uvicorn app:app --host 0.0.0.0 --port 8000
+        1. Install TShark
+        2. Install dependencies:
+           pip install -r server/requirements_server.txt
+        3. Run the FastAPI server:
+           uvicorn app:app --host 0.0.0.0 --port 8000
 
-  Client Side
+  Client Side:
 
-  1. Install Ollama
-  2. Pull the LLM model:
-     ollama pull qwen2.5
-  3. Install client dependencies:
-     pip install -r client/requirments_client.txt
+        1. Install Ollama
+        2. Pull the LLM model:
+           ollama pull qwen2.5
+        3. Install client dependencies:
+           pip install -r client/requirments_client.txt
