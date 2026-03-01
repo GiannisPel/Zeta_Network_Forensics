@@ -36,36 +36,36 @@ Project Zeta follows a distributed architecture separating ingestion, storage, a
       │ Client & Visualizations  │
       └──────────────────────────┘
 
-Server (Debian / Proxmox)
+Server (Debian / Proxmox):
 
-  PCAP ingestion
-  Parsing via TShark
-  Structured metadata extraction
-  Storage in SQLite (JSON-enabled)
-  REST API built with FastAPI
+        PCAP ingestion
+        Parsing via TShark
+        Structured metadata extraction
+        Storage in SQLite (JSON-enabled)
+        REST API built with FastAPI
   
 The server acts as the persistent network memory core.
 
-Client (Windows 11)
+Client (Windows 11):
 
-  CLI-based analyst interface
-  Interactive visualizations using Plotly
-  Local LLM orchestration via Ollama
+        CLI-based analyst interface
+        Interactive visualizations using Plotly
+        Local LLM orchestration via Ollama
 
 The client is responsible for:
 
-  Command execution
-  Data visualization
-  Context-aware querying
-  LLM interaction
+        Command execution
+        Data visualization
+        Context-aware querying
+        LLM interaction
 
 Database Layer
 SQLite with JSON extensions enables:
 
-  Flexible schema evolution
-  Layer-based packet representation
-  Efficient aggregation queries
-  Structured retrieval for LLM grounding
+        Flexible schema evolution
+        Layer-based packet representation
+        Efficient aggregation queries
+        Structured retrieval for LLM grounding
 
 # 3. Key Features & Methodology
   A. Retrieval-Augmented Generation (RAG)
