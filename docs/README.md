@@ -100,6 +100,11 @@ SQLite with JSON extensions enables:
     <img src="screenshots/netask_example.png" width="900" alt="netask_example">
   </p>
 
+  And with the command: /netviz --top-ips, we can confirm the output of the model:
+
+  <p align="center">
+    <img src="screenshots/top_ips_example.png" width="400" alt="netask_example">
+  </p>
 
   B. Structured Behavioral Analysis
 
