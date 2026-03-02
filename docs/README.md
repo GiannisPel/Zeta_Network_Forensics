@@ -1,5 +1,10 @@
 # 🛡️ Project Zeta: AI-Driven Network Forensic Analysis
 
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109.0-009688.svg?style=flat&logo=fastapi&logoColor=white)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15-FF6F00.svg?style=flat&logo=tensorflow&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
 # 1. Abstract
 
 Project Zeta is a distributed Client–Server application designed for intelligent network forensic analysis and real-time threat hunting.
@@ -7,6 +12,10 @@ Project Zeta is a distributed Client–Server application designed for intellige
 The system transforms raw packet captures (PCAP/PCAPNG) into structured, queryable telemetry and augments them with Retrieval-Augmented Generation (RAG) to produce contextualized security insights.
 
 Instead of simply displaying packet data, Zeta introduces a semantic reasoning layer over network traffic, enabling analysts to interpret complex activity patterns with greater clarity and speed.
+
+<p align="center">
+  <img src="screenshots/Greetings_Zeta.png" width="800" alt="Zeta says hello">
+</p>
 
 # 2. System Architecture
 
