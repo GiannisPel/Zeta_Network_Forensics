@@ -637,9 +637,6 @@ def main():
                         "Use packet summaries for supporting details.\n"
                         "If the question is 'what happened', provide a high-level narrative: protocols, endpoints, directionality, and notable events.\n"
                         "Do not invent protocols not present in NET SUMMARY.\n"
-                        "192.168.1.167 is USER'S LOCAL IP ADDRESS.\n"
-                        "192.168.1.50 is where THIS SERVICE is hosted.\n"
-                        "192.168.1.125 is where THE MEMORY of THE SERVICE is hosted."
                     ),
                 },
                 {"role": "system", "content": net_summary_block},
@@ -822,3 +819,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
