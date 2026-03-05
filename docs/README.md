@@ -5,7 +5,7 @@
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15-FF6F00.svg?style=flat&logo=tensorflow&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-# 1. Abstract
+## 1. Abstract
 
 Project Zeta is a distributed Client–Server application designed for intelligent network forensic analysis and real-time threat hunting.
 
@@ -17,7 +17,7 @@ Instead of simply displaying packet data, Zeta introduces a semantic reasoning l
   <img src="screenshots/Greetings_Zeta.png" width="800" alt="Zeta says hello">
 </p>
 
-# 2. System Architecture
+## 2. System Architecture
 
 Project Zeta follows a distributed architecture separating ingestion, storage, and reasoning from analyst interaction.
 
@@ -47,48 +47,48 @@ Project Zeta follows a distributed architecture separating ingestion, storage, a
 
 Server (Debian / Proxmox):
 
-        PCAP ingestion
-        Parsing via TShark
-        Structured metadata extraction
-        Storage in SQLite (JSON-enabled)
-        REST API built with FastAPI
+  - PCAP ingestion
+  - Parsing via TShark
+  - Structured metadata extraction
+  - Storage in SQLite (JSON-enabled)
+  - REST API built with FastAPI
   
 The server acts as the persistent network memory core.
 
 Client (Windows 11):
 
-        CLI-based analyst interface
-        Interactive visualizations using Plotly
-        Local LLM orchestration via Ollama
+  - CLI-based analyst interface
+  - Interactive visualizations using Plotly
+  - Local LLM orchestration via Ollama
 
 The client is responsible for:
 
-        Command execution
-        Data visualization
-        Context-aware querying
-        LLM interaction
+  - 1. Command execution
+  - 2. Data visualization
+  - 3. Context-aware querying
+  - 4. LLM interaction
 
 Database Layer
 SQLite with JSON extensions enables:
 
-        Flexible schema evolution
-        Layer-based packet representation
-        Efficient aggregation queries
-        Structured retrieval for LLM grounding
+  - Flexible schema evolution
+  - Layer-based packet representation
+  - Efficient aggregation queries
+  - Structured retrieval for LLM grounding
 
-# 3. Key Features & Methodology
-  # A. Retrieval-Augmented Generation (RAG)
+## 3. Key Features & Methodology
+  ### A. Retrieval-Augmented Generation (RAG)
 
   Command: /netask <query>
   
   The system does not operate as a generic chatbot.
   
-  Workflow:
+  - Workflow:
   
-    User submits a security-related query.
-    The server retrieves relevant packet records from the database.
-    Structured results are injected into the LLM context.
-    The LLM generates an answer grounded in actual capture data.
+    - User submits a security-related query.
+    - The server retrieves relevant packet records from the database.
+    - Structured results are injected into the LLM context.
+    - The LLM generates an answer grounded in actual capture data.
     
   This prevents hallucination and ensures that reasoning remains evidence-based.
   
@@ -106,21 +106,21 @@ SQLite with JSON extensions enables:
     <img src="screenshots/top_ips_example.png" width="700" alt="netask_example">
   </p>
 
-  # B. Structured Behavioral Analysis
+  ### B. Structured Behavioral Analysis
 
   Zeta converts packet-level telemetry into structured, queryable representations.
   
   Analytical capabilities include:
   
-    Source-to-destination flow mapping
-    Port usage distribution
-    Traffic concentration analysis
-    High-volume talker identification
-    Protocol distribution tracking
+  - Source-to-destination flow mapping
+  - Port usage distribution
+  - Traffic concentration analysis
+  - High-volume talker identification
+  - Protocol distribution tracking
     
   This allows analysts to move from raw packets to interaction-level reasoning.
 
-  # C. Interactive Visualizations
+  ### C. Interactive Visualizations
 
   Visual abstractions enhance interpretability.
   
@@ -137,7 +137,7 @@ SQLite with JSON extensions enables:
   
   All visualizations are rendered via Plotly for interactive exploration.
 
-# 4. Commands & Usage
+## 4. Commands & Usage
 
   | Command                | Description                                                             |
   | ---------------------- | ----------------------------------------------------------------------- |
@@ -152,20 +152,24 @@ SQLite with JSON extensions enables:
     <img src="screenshots/net_command.png" width="400" alt="net_command">
   </p>
 
-# 5. Installation & Setup
+## 5. Installation & Setup
 
-  Server Side:
+  - Server Side:
 
-        1. Install TShark
-        2. Install dependencies:
-           pip install -r server/requirements_server.txt
-        3. Run the FastAPI server:
-           uvicorn app:app --host 0.0.0.0 --port 8000
+    - 1. Install TShark
+         
+    - 2. Install dependencies:
+         pip install -r server/requirements_server.txt
+         
+    - 3. Run the FastAPI server:
+         uvicorn app:app --host 0.0.0.0 --port 8000
 
-  Client Side:
+  - Client Side:
 
-        1. Install Ollama
-        2. Pull the LLM model:
-           ollama pull qwen2.5
-        3. Install client dependencies:
-           pip install -r client/requirments_client.txt
+    - 1. Install Ollama
+         
+    - 2. Pull the LLM model:
+         ollama pull qwen2.5
+         
+    - 3. Install client dependencies:
+         pip install -r client/requirments_client.txt
