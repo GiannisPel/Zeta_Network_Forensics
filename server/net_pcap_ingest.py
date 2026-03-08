@@ -9,6 +9,7 @@ from scapy.layers.l2 import ARP
 from scapy.layers.dns import DNS
 
 from embedder import embed_text
+from ml_anomaly import load_model, extract_features, predict
 from app import net_db, load_or_create_net_index, save_net_index
 
 
@@ -20,6 +21,8 @@ def ingest_pcap_file(path: str, capture_id: str) -> int:
 
     packets = rdpcap(path)
     idx = load_or_create_net_index(dim=384)
+
+    model = load_model()
 
     conn = net_db()
     cur = conn.cursor()
@@ -116,6 +119,12 @@ def ingest_pcap_file(path: str, capture_id: str) -> int:
         dst_port = meta["layers"]["transport"].get("dst_port")
 
         text = f"{src_ip}:{src_port} → {dst_ip}:{dst_port} [{transport}]"
+
+        # ML anomaly detection
+        features = extract_features(meta)
+        ml_result = predict(model, features)
+
+        meta["ml"] = ml_result
 
         #Embedding
         vec = embed_text(text)
