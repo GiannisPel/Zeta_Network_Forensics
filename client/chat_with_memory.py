@@ -10,6 +10,7 @@ import time
 import os
 import sys
 import re
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from collections import Counter
@@ -111,6 +112,10 @@ Net commands:
   /netask [capture_id] | <question>
       Ask questions about imported network data.
       Example: /net ask test1.pcapng | what protocols are present?
+
+  /netanomalies [capture_id]
+      Shows the rate of the anomalies in terminal and in a graph 
+      Example: /netanomalies test1.pcapng
 
   /netstats
       Show quick stats for the current / selected capture.
@@ -361,9 +366,117 @@ def net_viz_flow_gui(capture_id: str):
     
     fig.show()
 
+def get_anomalies(capture_id):
+
+    r = requests.get(
+        f"{BASE_URL}/net/anomalies",
+        params={"capture_id": capture_id}
+    )
+
+    r.raise_for_status()
+
+    return r.json()
+
+def threat_level(score):
+
+    if score is None:
+        return "UNKNOWN"
+
+    if score < -0.20:
+        return "CRITICAL"
+
+    if score < -0.12:
+        return "HIGH"
+
+    if score < -0.06:
+        return "MEDIUM"
+
+    return "LOW"
+
+def print_anomalies(anomalies):
+
+    if not anomalies:
+        print("No anomalies found")
+        return
+
+    for a in anomalies:
+
+        net = a["layers"]["network"]
+        trans = a["layers"]["transport"]
+        ml = a.get("ml", {})
+        score = ml.get("score")
+        level = threat_level(score)
+
+        print("\n⚠ ANOMALY")
+
+        print(
+            f'{net.get("src_ip")}:{trans.get("src_port")} → '
+            f'{net.get("dst_ip")}:{trans.get("dst_port")}'
+        )
+
+        print("score:", ml.get("score"))
+        print("threat level:", level)
+        print("\nThis tool works as an assistant and may be give you wrong results depening on the dataset its been trained on")
+
+def viz_anomalies_plotly(anomalies, capture_id):
+    if not anomalies:
+        return
+
+    #Convert to dataframe to be easier
+    df_list = []
+    for a in anomalies:
+        df_list.append({
+            "timestamp": a.get("timestamp"), 
+            "score": a.get("ml", {}).get("score", 0),
+            "src_ip": a["layers"]["network"].get("src_ip"),
+            "dst_port": a["layers"]["transport"].get("dst_port"),
+            "level": threat_level(a.get("ml", {}).get("score"))
+        })
+    
+    df = pd.DataFrame(df_list)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    #Initializing colors for every level of threat
+    color_map = {
+        "CRITICAL": "red",
+        "HIGH": "orange",
+        "MEDIUM": "yellow",
+        "LOW": "cyan"
+    }
+
+    fig = go.Figure()
+
+    #Adding points per threat level
+    for level, color in color_map.items():
+        sub_df = df[df['level'] == level]
+        if not sub_df.empty:
+            fig.add_trace(go.Scatter(
+                x=sub_df['timestamp'],
+                y=sub_df['score'],
+                mode='markers',
+                name=level,
+                marker=dict(color=color, size=10, symbol='diamond'),
+                text=[f"IP: {r['src_ip']}<br>Port: {r['dst_port']}" for _, r in sub_df.iterrows()],
+                hovertemplate="<b>%{text}</b><br>Score: %{y}<br>Time: %{x}<extra></extra>"
+            ))
+
+    #thresholds
+    fig.add_hline(y=-0.20, line_dash="dot", line_color="red", annotation_text="Critical Threshold")
+    fig.add_hline(y=-0.06, line_dash="dot", line_color="orange")
+
+    fig.update_layout(
+        title=f"Anomaly Score Timeline - {capture_id}",
+        xaxis_title="Time",
+        yaxis_title="Isolation Forest Score (lower is more anomalous)",
+        template="plotly_dark",
+        hovermode="closest"
+    )
+
+    fig.show()
+
 def build_system_messages(memory_block: str, wiki_block: str) -> List[Dict[str, str]]:
     system_text = (
-        "You are a local AI assistant named ZETA running on the user's computer. "
+        "You are a local AI assistant running on the user's computer. "
         "The user is speaking directly to you and when the user addresses you, answer accordingly. "
         "Use provided RELEVANT MEMORIES and WIKIPEDIA CONTEXT when they help. "
         "If you are uncertain, say so and ask a brief clarifying question. "
@@ -678,6 +791,29 @@ def main():
                 print(f"Visualization failed: {e}\n")
 
             continue
+
+        elif cmd.startswith("/netanomalies"):
+
+            parts = cmd.split()
+
+            if len(parts) < 2:
+                print("Usage: /netanomalies <capture_id>")
+                continue
+
+            capture_id = parts[1]
+
+            anomalies = get_anomalies(capture_id)
+
+            #Print on Terminal for fast info
+            print_anomalies(anomalies)
+
+            #Visualiazation for analysis
+            if anomalies:
+                print(f"\nZeta: Generating anomaly timeline for {capture_id}...")
+                viz_anomalies_plotly(anomalies, capture_id)
+            
+            continue
+
         # /net import <file path>
         if cmd_l.startswith("/netimp "):
             raw_path = cmd[len("/netimp "):].strip()
@@ -817,6 +953,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
-
