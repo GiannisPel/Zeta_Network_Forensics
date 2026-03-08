@@ -103,7 +103,7 @@ SQLite with JSON extensions enables:
   And with the command: /netviz --top-ips, we can confirm the output of the model:
 
   <p align="center">
-    <img src="screenshots/top_ips_example.png" width="700" alt="netask_example">
+    <img src="screenshots/top_ips_example.png" width="700" alt="top_ips_example">
   </p>
 
   ### B. Structured Behavioral Analysis
@@ -143,7 +143,7 @@ SQLite with JSON extensions enables:
   - **Threat Scoring:** Each flow is assigned a score. Zeta categorizes these into **CRITICAL, HIGH, MEDIUM,** or **LOW** threat levels based on statistical distance.
 
   <p align="left">
-    <img src="screenshots/anomaly_command.png" width="400" alt="net_command">
+    <img src="screenshots/anomaly_command.png" width="800" alt="anomaly_command">
   </p>
   
 ## ⌨️ 4. Commands & Usage
