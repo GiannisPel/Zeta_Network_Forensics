@@ -135,6 +135,10 @@ SQLite with JSON extensions enables:
     Top talkers
     Protocol distribution
     Real-time traffic statistics
+
+  <p align="left">
+    <img src="screenshots/sankey_example.png" width="800" alt="sankey_example">
+  </p>
   
   All visualizations are rendered via Plotly for interactive exploration.
 
