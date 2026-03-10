@@ -54,7 +54,7 @@ Project Zeta follows a distributed architecture separating ingestion, storage, a
 Server (Debian / Proxmox):
 
   - PCAP ingestion
-  - Parsing via TShark
+  - Parsing via Scapy
   - Structured metadata extraction
   - Storage in SQLite (JSON-enabled)
   - REST API built with FastAPI
