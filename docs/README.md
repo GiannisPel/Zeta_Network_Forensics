@@ -120,7 +120,6 @@ The client is responsible for:
   Sankey Diagrams
   
     Source → Port → Destination flow modeling
-    Weighted interaction intensity
 
   <p align="center">
     <img src="screenshots/Sankey_example.png" width="800" alt="Sankey_example">
