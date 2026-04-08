@@ -99,10 +99,10 @@ def ingest_pcap_file(path: str, capture_id: str) -> int:
                 "protocol": "ICMP"
             }
 
-        #Application Layer
-            dns = pkt[DNS]
+        #FIXED: DNS block was incorrectly indented inside the ICMP branch, meaning it never ran (DNS travels over UDP, not ICMP) and would crash on any ICMP packet that reached it. Moved to its own block.
+        if DNS in pkt:
             meta["layers"]["application"]["protocol"] = "DNS"
-
+            dns = pkt[DNS]
             if dns.qd:
                 try:
                     meta["layers"]["application"]["query"] = (
@@ -120,7 +120,7 @@ def ingest_pcap_file(path: str, capture_id: str) -> int:
 
         text = f"{src_ip}:{src_port} → {dst_ip}:{dst_port} [{transport}]"
 
-        # ML anomaly detection
+        #ML anomaly detection
         features = extract_features(meta)
         ml_result = predict(model, features)
 
