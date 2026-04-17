@@ -2,13 +2,13 @@ import requests
 import numpy as np
 import os
 
-#Local Ollama (Windows machine)
-OLLAMA_HOST = "http://127.x.x.x:11434"
+#Local Ollama
+OLLAMA_HOST = "http://127.0.0.1:11434"
 EMBED_MODEL = "nomic-embed-text"
 
 #Proxmox container memory API
-MEMORY_API = "http://192.168.x.x:8000"
-WIKI_API = "http://192.168.x.x:8000"  
+MEMORY_API = "http://192.168.1.125:8000"
+WIKI_API = "http://192.168.1.125:8000"  
 
 
 def ollama_embed(text: str) -> np.ndarray:
