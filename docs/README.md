@@ -1,4 +1,4 @@
-# 🛡️ Project Zeta: AI-Driven Network Forensic Analysis
+# 🛡️ Project Sairene: AI-Driven Network Forensic Analysis
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109.0-009688.svg?style=flat&logo=fastapi&logoColor=white)
@@ -8,14 +8,14 @@
 
 ## 📒 1. Abstract
 
-Project Zeta is a distributed Client–Server application designed for intelligent network forensic analysis and real-time threat hunting.
+Project Sairene is a distributed Client–Server application designed for intelligent network forensic analysis and real-time threat hunting.
 
 The system transforms raw packet captures (PCAP/PCAPNG) into structured, queryable telemetry and augments them with Retrieval-Augmented Generation (RAG) to produce contextualized security insights.
 
-Instead of simply displaying packet data, Zeta introduces a semantic reasoning layer over network traffic, enabling analysts to interpret complex activity patterns with greater clarity and speed.
+Instead of simply displaying packet data, Sairene introduces a semantic reasoning layer over network traffic, enabling analysts to interpret complex activity patterns with greater clarity and speed.
 
 <p align="center">
-  <img src="screenshots/Greetings_Zeta.png" width="800" alt="Zeta says hello">
+  <img src="screenshots/Greetings_Sairene.png" width="800" alt="Sairene says hello">
 </p>
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ Im thinking of changing the architecture of the app from Python to Rust for spee
 
 ## 🏗️ 2. System Architecture
 
-Project Zeta follows a distributed architecture separating ingestion, storage, and reasoning from analyst interaction.
+Project Sairene follows a distributed architecture separating ingestion, storage, and reasoning from analyst interaction.
 
       ┌──────────────┐
       │     PCAP     │
@@ -129,7 +129,7 @@ The client is responsible for:
 
   ### B. Structured Behavioral Analysis
 
-  Zeta converts packet-level telemetry into structured, queryable representations.
+  Sairene converts packet-level telemetry into structured, queryable representations.
   
   Analytical capabilities include:
   
@@ -166,9 +166,9 @@ The client is responsible for:
   All visualizations are rendered via Plotly for interactive exploration.
 
   ### D. Machine Learning Anomaly Detection (Isolation Forest)
-  Zeta uses an **Isolation Forest** algorithm to identify outliers in network traffic without requiring pre-labeled attack signatures.
+  Sairene uses an **Isolation Forest** algorithm to identify outliers in network traffic without requiring pre-labeled attack signatures.
   - **Logic:** The model isolates anomalies based on feature deviations (for example, unusual port-to-IP fan-out, packet frequency).
-  - **Threat Scoring:** Each flow is assigned a score. Zeta categorizes these into **CRITICAL, HIGH, MEDIUM,** or **LOW** threat levels based on statistical distance.
+  - **Threat Scoring:** Each flow is assigned a score. Sairene categorizes these into **CRITICAL, HIGH, MEDIUM,** or **LOW** threat levels based on statistical distance.
 
   <p align="center">
     <img src="screenshots/anomaly_command.png" width="800" alt="anomaly_command">
