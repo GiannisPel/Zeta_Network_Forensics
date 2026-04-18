@@ -28,9 +28,9 @@ Sairene specializes in identifying:
 
 ## 🧬 Core Philosophy
 
-> Detect what blends in.  
-> Explain what machines ignore.  
-> Surface what attackers hide.
+- Detect what blends in.  
+- Explain what machines ignore.  
+- Surface what attackers hide.
 
 ---
 
