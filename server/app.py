@@ -507,7 +507,7 @@ async def net_import_pcap_stream(file: UploadFile = File(...)):
     event_queue: queue.Queue = queue.Queue()
 
     def run_ingest():
-        """Runs in a background thread. Pushes string lines into event_queue."""
+        #Runs in a background thread. Pushes string lines into event_queue
         try:
             from net_pcap_ingest import ingest_pcap_file_stream
 
@@ -536,11 +536,9 @@ async def net_import_pcap_stream(file: UploadFile = File(...)):
     thread.start()
 
     async def generate():
-        """
-        Async generator that drains event_queue.
-        Yields each line immediately so the HTTP response flushes to the
-        client in real time rather than buffering until ingest completes.
-        """
+        
+        #Async generator that drains event_queue. Yields each line immediately so the HTTP response flushes to the client in real time rather than buffering until ingest completes.
+        
         loop = asyncio.get_event_loop()
         while True:
             #Run the blocking queue.get in a thread pool so it doesnt block the event loop while waiting for the next batch
@@ -662,13 +660,10 @@ def net_captures():
 
 @app.delete("/net/delete_capture")
 def net_delete_capture(capture_id: str = Query(...)):
-    """
-    Delete all packets belonging to a specific capture_id from SQLite.
+    #Delete all packets belonging to a specific capture_id from SQLite
+    #the FAISS index is NOT rebuilt automatically (so it leaves gaps)
+    #Call /rebuild_index after bulk deletions if needed
 
-    Note: the FAISS index is NOT rebuilt automatically — deleted vectors
-    leave gaps but do not cause incorrect results, they just waste a small
-    amount of memory. Call /rebuild_index after bulk deletions if needed.
-    """
     conn = net_db()
     cur  = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM net_memories WHERE capture_id = ?", (capture_id,))
@@ -686,6 +681,82 @@ def net_delete_capture(capture_id: str = Query(...)):
     conn.close()
 
     return {"ok": True, "capture_id": capture_id, "packets_deleted": int(count)}
+
+
+@app.post("/net/rescore/{capture_id}")
+def net_rescore(capture_id: str):
+    
+    #Rerun ML scoring on all stored records for a capture without reparsing, reembedding or touching FAISS
+    #Use this after changing ml_anomaly.py detection logic
+    #rewrites meta_json["ml"] in SQLite
+    #For flow_tracker or ingest changes, use /netdel + /netimp instead.
+    
+    from ml_anomaly import load_model, extract_features, predict
+
+    model = load_model()
+    conn  = net_db()
+    cur   = conn.cursor()
+
+    rows = cur.execute(
+        "SELECT id, meta_json FROM net_memories WHERE capture_id = ?",
+        (capture_id,)
+    ).fetchall()
+
+    if not rows:
+        conn.close()
+        raise HTTPException(
+            status_code=404,
+            detail=f"Capture '{capture_id}' not found. Use /net/captures to list available captures."
+        )
+
+    updated   = 0
+    anomalies = 0
+    errors    = 0
+
+    for row_id, meta_json_str in rows:
+        try:
+            meta             = json.loads(meta_json_str)
+            flow_stats       = meta.get("flow", {})
+            flow_record_type = meta.get("flow_record_type", "packet")
+            is_flow_summary  = (flow_record_type in {"flow_summary", "l2_summary"})
+
+            features = extract_features(meta, flow_stats)
+            result   = predict(
+                model,
+                features,
+                meta=meta,
+                flow_stats=flow_stats,
+                is_flow_summary=is_flow_summary,
+            )
+
+            meta["ml"] = result
+            cur.execute(
+                "UPDATE net_memories SET meta_json = ? WHERE id = ?",
+                (json.dumps(meta, ensure_ascii=False), row_id)
+            )
+
+            updated += 1
+            if result.get("anomaly"):
+                anomalies += 1
+
+            # Avoid one huge transaction on large captures.
+            if updated % 1000 == 0:
+                conn.commit()
+
+        except Exception:
+            errors += 1
+            continue
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "ok": True,
+        "capture_id": capture_id,
+        "records_rescored": updated,
+        "anomalies_found": anomalies,
+        "errors": errors,
+    }
 
 @app.get("/net/viz/top-ips")
 def net_viz_top_ips(capture_id: str, limit: int = 10):
@@ -736,20 +807,33 @@ def net_anomalies(capture_id: str):
     ).fetchall()
     conn.close()
 
+    l2_anomalies     = []
     flow_anomalies   = []
     packet_anomalies = []
+
+    def _rank(meta: dict) -> tuple[int, float]:
+        ml = meta.get("ml", {})
+        sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(ml.get("severity"), 0)
+        conf = float(ml.get("confidence", 0.0) or 0.0)
+        return (sev_rank, conf)
 
     for r in rows:
         meta = json.loads(r[0])
         if not meta.get("ml", {}).get("anomaly"):
             continue
-        if meta.get("flow_record_type") == "flow_summary":
+        record_type = meta.get("flow_record_type")
+        if record_type == "l2_summary":
+            l2_anomalies.append(meta)
+        elif record_type == "flow_summary":
             flow_anomalies.append(meta)
         else:
             packet_anomalies.append(meta)
 
-    #Flow summaries first cause they represent complete behavioral evidence
-    return flow_anomalies + packet_anomalies
+    #Incident level summaries first: L2 MITM/infrastructure compromise, then L3/L4 behavioral summaries, then raw packet evidence
+    l2_anomalies.sort(key=_rank, reverse=True)
+    flow_anomalies.sort(key=_rank, reverse=True)
+    packet_anomalies.sort(key=_rank, reverse=True)
+    return l2_anomalies + flow_anomalies + packet_anomalies
 
 @app.get("/net/stats")
 def net_stats():
@@ -877,12 +961,8 @@ def add_memory(req: AddMemoryReq):
 
 @app.delete("/delete_memory")
 def delete_memory(memory_id: str = Query(...)):
-    """
-    Delete a memory by its memory_id from SQLite.
-    Note: the FAISS index is not updated live. Call /rebuild_index
-    after bulk deletions, or restart the server (index rebuilds on startup
-    if embedding BLOBs are present).
-    """
+    #Delete a memory by its memory_id from SQLite.
+    #the FAISS index is not updated live (Call /rebuild_index after bulk deletions or restart the server)
     conn = db()
     try:
         cur = conn.cursor()
@@ -899,7 +979,7 @@ def delete_memory(memory_id: str = Query(...)):
 
 @app.post("/rebuild_index")
 def rebuild_index_endpoint():
-    """Expose rebuild_faiss_index as an API endpoint."""
+    #Expose rebuild_faiss_index as an API endpoint
     added = rebuild_faiss_index()
     return {"ok": True, "vectors_rebuilt": added}
 
@@ -982,11 +1062,9 @@ def retrieve_memories(req: RetrieveReq):
     return {"memories": out}
 
 def rebuild_faiss_index() -> int:
-    """
-    Rebuild the memory FAISS index entirely from the embedding BLOBs
-    stored in SQLite. Safe to call after bulk deletes or corruption.
-    Returns the number of vectors rebuilt.
-    """
+    
+    #Rebuild the memory FAISS index entirely from the embedding BLOBs stored in SQLite
+    
     global _mem_index, _mem_index_dirty
 
     dim = get_dim()
@@ -1001,7 +1079,6 @@ def rebuild_faiss_index() -> int:
     cur.execute(
         "SELECT memory_id, embedding FROM memories ORDER BY faiss_row ASC"
     )
-    #FIXED: fetchall() not fetchball()
     rows = cur.fetchall()
     conn.close()
 
