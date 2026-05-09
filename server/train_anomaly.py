@@ -1,14 +1,3 @@
-"""
-train_anomaly.py — Train the IsolationForest anomaly detection model
-from packets already stored in the net memory database.
-
-Run this script after ingesting enough PCAP data (minimum 500 packets
-recommended, 5000+ for reliable anomaly boundaries).
-
-Usage:
-    python train_anomaly.py
-"""
-
 import os
 import sys
 import sqlite3
@@ -22,7 +11,6 @@ from collections import defaultdict
 
 #Local project imports
 from ml_anomaly   import extract_features, N_FEATURES, MODEL_PATH
-from flow_tracker import FlowTracker
 
 DB_PATH       = os.environ.get(
     "NET_DB_PATH", "/var/lib/memory_service/net/net.db"
@@ -139,7 +127,6 @@ print(f"Rows selected for training: {len(rows)}")
 
 #Feature extraction
 
-trackers: dict[str, FlowTracker] = defaultdict(FlowTracker)
 features: list = []
 per_capture_counts: dict[str, int] = defaultdict(int)
 skipped = 0
@@ -155,7 +142,7 @@ for cap_id, meta_json in rows:
         skipped += 1
         continue
 
-    flow_stats = trackers[cap_id].update(meta)
+    flow_stats = meta.get("flow", {}) if isinstance(meta.get("flow", {}), dict) else {}
 
     try:
         vec = extract_features(meta, flow_stats)
