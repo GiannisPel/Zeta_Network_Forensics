@@ -18,7 +18,7 @@ from typing import List, Dict, Any
 
 
 #Config
-DISK_PATH = r"S:\\"  #Drive to show in /neofetch
+DISK_PATH = r"C:\\"  #Drive to show in /neofetch
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 CHAT_MODEL = "qwen2.5:latest"
 CONVERSATION_ID = "myproject"
@@ -203,14 +203,13 @@ def ollama_chat_stream(messages: List[Dict[str, str]], model: str, timeout: int 
     with requests.post(OLLAMA_URL, json=payload, stream=True, timeout=timeout) as r:
         r.raise_for_status()
 
-        #Ollama streams NDJSON: one JSON object per line
+        #Ollama streams one JSON object per line
         for line in r.iter_lines(decode_unicode=True):
             if not line:
                 continue
 
             obj = json.loads(line)
 
-            #Typical chunk: {"message":{"role":"assistant","content":"..."}, "done": false}
             msg = obj.get("message")
             if isinstance(msg, dict):
                 delta = msg.get("content") or ""
@@ -311,8 +310,7 @@ def net_viz_flow_gui(capture_id: str):
     #Sticking to 20 flows so the graph wont be crowded
     data = data[:20]
 
-    #Getting the data ready for Sankey
-    #Finding the individual stations(Source IPs, Ports, Destination IPs) and converting them to string
+    #Finding the individual stations(src_ips, ports, dst_ips)
     all_nodes = list(set(
         [str(d['src']) for d in data] + 
         [f"Port: {d['port']}" for d in data] + 
@@ -343,14 +341,13 @@ def net_viz_flow_gui(capture_id: str):
         targets.append(node_indices[dst])
         values.append(count)
 
-    #Generating the graph
     fig = go.Figure(data=[go.Sankey(
         node=dict(
             pad=15,
             thickness=20,
             line=dict(color="black", width=0.5),
             label=all_nodes,
-            color="cyan" #Color for the nodes
+            color="cyan" 
         ),
         link=dict(
             source=sources,
@@ -395,11 +392,76 @@ def threat_level(score):
 
     return "LOW"
 
+def select_representative_anomalies(anomalies, limit: int = 20):
+    #raw anomaly rows into representative incidents for terminal/plot output.
+    #If a strong L2 incident exists, generic L3/L4 labels are treated as supporting noise and not shown as primary findings.
+    if not anomalies:
+        return []
+
+    l2_primary = {
+        "ARP_POISONING", "GRATUITOUS_ARP_STORM", "DHCP_STARVATION",
+        "MAC_FLOOD", "STP_ROOT_ATTACK", "VLAN_HOPPING",
+    }
+    generic_noise = {
+        "HIGH_RATE_FLOOD", "STEALTH_SCAN", "PORT_SCAN",
+        "AUTOMATED_TRAFFIC", "LOW_AND_SLOW_EXFIL",
+    }
+
+    l2_anomaly_types = [
+        a.get("ml", {}).get("attack_type")
+        for a in anomalies
+        if a.get("flow_record_type") == "l2_summary"
+        and a.get("ml", {}).get("attack_type") in l2_primary
+        and a.get("ml", {}).get("anomaly")
+    ]
+    has_l2_primary = bool(l2_anomaly_types)
+
+    dominant_l2 = None
+    for fam in ["STP_ROOT_ATTACK", "VLAN_HOPPING", "DHCP_STARVATION", "MAC_FLOOD", "ARP_POISONING", "GRATUITOUS_ARP_STORM"]:
+        if fam in l2_anomaly_types:
+            dominant_l2 = fam
+            break
+
+    family_best = {}
+    for a in anomalies:
+        ml = a.get("ml", {})
+        atk = ml.get("attack_type", "ANOMALOUS_TRAFFIC")
+        if has_l2_primary and atk in generic_noise:
+            continue
+        if dominant_l2 in {"STP_ROOT_ATTACK", "VLAN_HOPPING"} and atk in {"ARP_POISONING", "GRATUITOUS_ARP_STORM", "MAC_FLOOD"}:
+            continue
+
+        net = a.get("layers", {}).get("network", {})
+        key = (str(net.get("src_ip")), str(net.get("dst_ip")), atk)
+        sev = ml.get("severity") or threat_level(ml.get("score"))
+        conf = float(ml.get("confidence", 0.0) or 0.0)
+        rec_type = a.get("flow_record_type", "packet")
+        sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(sev, 0)
+        rec_rank = {"l2_summary": 4, "flow_summary": 3, "l2_packet": 1, "packet": 1}.get(rec_type, 0)
+        rank = (sev_rank, rec_rank, conf)
+
+        if key not in family_best or rank > family_best[key][0]:
+            family_best[key] = (rank, a)
+
+    selected = [v[1] for v in family_best.values()]
+    selected.sort(
+        key=lambda a: (
+            {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(a.get("ml", {}).get("severity"), 0),
+            {"l2_summary": 4, "flow_summary": 3, "l2_packet": 1, "packet": 1}.get(a.get("flow_record_type", "packet"), 0),
+            float(a.get("ml", {}).get("confidence", 0.0) or 0.0),
+        ),
+        reverse=True,
+    )
+    return selected[:limit]
+
+
 def print_anomalies(anomalies):
 
     if not anomalies:
         print("No anomalies found")
         return
+
+    anomalies = select_representative_anomalies(anomalies)
 
     for a in anomalies:
 
@@ -407,7 +469,7 @@ def print_anomalies(anomalies):
         trans = a["layers"]["transport"]
         ml = a.get("ml", {})
         score = ml.get("score")
-        level = threat_level(score)
+        level = ml.get("severity") or threat_level(score)
 
         print("\n⚠ ANOMALY")
 
@@ -416,6 +478,8 @@ def print_anomalies(anomalies):
             f'{net.get("dst_ip")}:{trans.get("dst_port")}'
         )
 
+        print("attack type:", ml.get("attack_type", "UNKNOWN"))
+        print("confidence:", ml.get("confidence", "?"))
         print("score:", ml.get("score"))
         print("threat level:", level)
         print("\nThis tool works as an assistant and may be give you wrong results depening on the dataset its been trained on")
@@ -424,30 +488,38 @@ def viz_anomalies_plotly(anomalies, capture_id):
     if not anomalies:
         return
 
+    anomalies = select_representative_anomalies(anomalies, limit=50)
+    if not anomalies:
+        print("No representative anomalies to plot after suppression.")
+        return
+
+    severity_rank = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+
     df_list = []
     for a in anomalies:
-        #FIXED: timestamp is nested under a["packet"]["timestamp"], not top level
-        ts      = a.get("packet", {}).get("timestamp")
-        score   = a.get("ml", {}).get("score", 0)
-        src_ip  = a["layers"]["network"].get("src_ip", "?")
-        dst_port= a["layers"]["transport"].get("dst_port")
-        level   = threat_level(score)
+        ts = a.get("packet", {}).get("timestamp")
+        ml = a.get("ml", {})
+        score = ml.get("score", 0)
+        level = ml.get("severity") or threat_level(score)
+        src_ip = a.get("layers", {}).get("network", {}).get("src_ip", "?")
+        dst_port = a.get("layers", {}).get("transport", {}).get("dst_port")
+        attack_type = ml.get("attack_type", "UNKNOWN")
+        confidence = ml.get("confidence", "?")
 
         df_list.append({
             "timestamp": ts,
-            "score":     score,
-            "src_ip":    src_ip,
-            "dst_port":  dst_port,
-            "level":     level,
+            "if_score": score,
+            "severity_rank": severity_rank.get(level, 0),
+            "src_ip": src_ip,
+            "dst_port": dst_port,
+            "level": level,
+            "attack_type": attack_type,
+            "confidence": confidence,
         })
 
     df = pd.DataFrame(df_list)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True, errors="coerce")
 
-    df["timestamp"] = pd.to_datetime(
-        df["timestamp"], unit="s", utc=True, errors="coerce"
-    )
-
-    #Drop rows where timestamp couldnt be parsed
     invalid = df["timestamp"].isna().sum()
     if invalid > 0:
         print(f"  Warning: {invalid} anomalies had unparseable timestamps and were dropped from the chart.")
@@ -459,9 +531,9 @@ def viz_anomalies_plotly(anomalies, capture_id):
 
     color_map = {
         "CRITICAL": "red",
-        "HIGH":     "orange",
-        "MEDIUM":   "yellow",
-        "LOW":      "cyan",
+        "HIGH": "orange",
+        "MEDIUM": "yellow",
+        "LOW": "cyan",
     }
 
     fig = go.Figure()
@@ -471,30 +543,31 @@ def viz_anomalies_plotly(anomalies, capture_id):
         if not sub_df.empty:
             fig.add_trace(go.Scatter(
                 x=sub_df["timestamp"],
-                y=sub_df["score"],
+                y=sub_df["severity_rank"],
                 mode="markers",
                 name=level,
                 marker=dict(color=color, size=10, symbol="diamond"),
                 text=[
-                    f"IP: {r['src_ip']}<br>Port: {r['dst_port']}"
+                    f"Attack: {r['attack_type']}<br>IP: {r['src_ip']}<br>Port: {r['dst_port']}<br>Confidence: {r['confidence']}<br>IF score: {r['if_score']:.4f}"
                     for _, r in sub_df.iterrows()
                 ],
                 hovertemplate=(
                     "<b>%{text}</b><br>"
-                    "Score: %{y:.4f}<br>"
+                    "Severity rank: %{y}<br>"
                     "Time: %{x}<extra></extra>"
                 ),
             ))
 
-    fig.add_hline(y=-0.20, line_dash="dot", line_color="red",
-                  annotation_text="Critical Threshold")
-    fig.add_hline(y=-0.06, line_dash="dot", line_color="orange",
-                  annotation_text="Medium Threshold")
-
     fig.update_layout(
-        title=f"Anomaly Score Timeline - {capture_id}",
+        title=f"Behavioral Severity Timeline - {capture_id}",
         xaxis_title="Time",
-        yaxis_title="Isolation Forest Score (lower = more anomalous)",
+        yaxis_title="Behavioral Severity",
+        yaxis=dict(
+            tickmode="array",
+            tickvals=[1, 2, 3, 4],
+            ticktext=["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+            range=[0.5, 4.5],
+        ),
         template="plotly_dark",
         hovermode="closest",
     )
@@ -682,8 +755,7 @@ def main():
                 print("Usage: /netask [capture_id |] <question>\n")
                 continue
 
-            #Queries having words like: weird, suspicious cant indicate to a specific semantic search
-            #So having certain keywords, direct the sources to the ML anomaly model and take sources also from there
+            #Keywords direct the sources to the ML anomaly model and take sources also from there
             SECURITY_KEYWORDS = {
                 "malicious", "anomal", "attack", "scan", "threat", "suspicious",
                 "intrusion", "exploit", "flood", "beacon", "exfiltrat", "tunnel",
@@ -710,8 +782,7 @@ def main():
                       f"{h.get('text','')[:100]}")
             print()
 
-            #Anomaly retrieval (runs when question is triggerred by keywords)
-            #Pulls flagged packets directly from meta_json anomaly data
+            #Anomaly retrieval (runs when question is triggerred by keywords) and pulls flagged packets directly from meta_json anomaly data
             anomaly_block = ""
             if is_security_question and capture_id:
                 try:
@@ -719,37 +790,179 @@ def main():
                     print(f"DEBUG anomaly hits: {len(anomalies)}")
 
                     if anomalies:
-                        anom_lines = []
-                        for a in anomalies[:40]:  #cap at 40 for context window
-                            net_l   = a.get("layers", {}).get("network",   {})
-                            trans_l = a.get("layers", {}).get("transport", {})
-                            ml      = a.get("ml",     {})
-                            flow    = a.get("flow",   {})
+                        type_counts = Counter()
+                        family_best: dict[tuple[str, str, str], dict] = {}
 
-                            src  = f"{net_l.get('src_ip')}:{trans_l.get('src_port')}"
-                            dst  = f"{net_l.get('dst_ip')}:{trans_l.get('dst_port')}"
-                            score   = ml.get("score", 0.0)
-                            level   = threat_level(score)
+                        #Build a incident level view before the LLM sees data so this prevents packet noise from burying stronger structural findings.
+                        for a in anomalies:
+                            net_l = a.get("layers", {}).get("network", {})
+                            ml = a.get("ml", {})
+                            attack_type = ml.get("attack_type", "ANOMALOUS_TRAFFIC")
+                            severity = ml.get("severity") or threat_level(ml.get("score"))
+                            confidence = float(ml.get("confidence", 0.0) or 0.0)
+                            record_type = a.get("flow_record_type", "packet")
+
+                            if attack_type != "ANOMALOUS_TRAFFIC":
+                                type_counts[attack_type] += 1
+
+                            src_ip = str(net_l.get("src_ip"))
+                            dst_ip = str(net_l.get("dst_ip"))
+                            family_key = (src_ip, dst_ip, attack_type)
+
+                            record_bonus = {"l2_summary": 4, "flow_summary": 3, "l2_packet": 1, "packet": 1}.get(record_type, 0)
+                            severity_bonus = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(severity, 0)
+                            specificity = {
+                                "STP_ROOT_ATTACK": 110,
+                                "VLAN_HOPPING": 108,
+                                "DHCP_STARVATION": 106,
+                                "MAC_FLOOD": 104,
+                                "ARP_POISONING": 100,
+                                "GRATUITOUS_ARP_STORM": 98,
+                                "SYN_FLOOD": 95,
+                                "XMAS_SCAN": 92,
+                                "DNS_TUNNELING": 88,
+                                "ICMP_TUNNELING": 86,
+                                "LOW_AND_SLOW_EXFIL": 82,
+                                "PORT_SCAN": 74,
+                                "STEALTH_SCAN": 70,
+                                "BEACONING": 68,
+                                "DNS_RECON": 60,
+                                "FRAGMENTATION_EVASION": 55,
+                                "HIGH_RATE_FLOOD": 50,
+                                "AUTOMATED_TRAFFIC": 35,
+                                "LOW_TTL": 25,
+                            }.get(attack_type, 0)
+                            rank = (severity_bonus, confidence, record_bonus, specificity)
+                            prev = family_best.get(family_key)
+                            if prev is None or rank > prev["rank"]:
+                                family_best[family_key] = {"rank": rank, "record": a}
+
+                        l2_primary_present = any(
+                            t in type_counts for t in (
+                                "ARP_POISONING", "GRATUITOUS_ARP_STORM", "DHCP_STARVATION",
+                                "MAC_FLOOD", "STP_ROOT_ATTACK", "VLAN_HOPPING"
+                            )
+                        )
+                        strong_specific_present = any(
+                            t in type_counts for t in (
+                                "ARP_POISONING", "GRATUITOUS_ARP_STORM", "DHCP_STARVATION",
+                                "MAC_FLOOD", "STP_ROOT_ATTACK", "VLAN_HOPPING",
+                                "XMAS_SCAN", "SYN_FLOOD", "DNS_TUNNELING",
+                                "ICMP_TUNNELING", "LOW_AND_SLOW_EXFIL"
+                            )
+                        )
+
+                        #Prefer the most specific L2 incident family when multiple L2summaries appear in the same capture
+                        #Example: an STP root attack can create MAC/ARP side-effects, but the primary incident should remain STP_ROOT_ATTACK
+                        l2_specificity_order = [
+                            "STP_ROOT_ATTACK", "VLAN_HOPPING", "DHCP_STARVATION",
+                            "MAC_FLOOD", "ARP_POISONING", "GRATUITOUS_ARP_STORM",
+                        ]
+                        dominant_l2 = None
+                        for fam in l2_specificity_order:
+                            if fam in type_counts:
+                                dominant_l2 = fam
+                                break
+
+                        selected = []
+                        for key, payload in family_best.items():
+                            atk = key[2]
+                            #If a strong L2 incident exists, generic L3/L4 labels are collateral packet noise and should not dominate the incident report
+                            if l2_primary_present and atk in {"PORT_SCAN", "STEALTH_SCAN", "AUTOMATED_TRAFFIC", "HIGH_RATE_FLOOD", "LOW_AND_SLOW_EXFIL"}:
+                                continue
+                            if dominant_l2 in {"STP_ROOT_ATTACK", "VLAN_HOPPING"} and atk in {"ARP_POISONING", "GRATUITOUS_ARP_STORM", "MAC_FLOOD"}:
+                                #Keep only the dominant infrastructure layer attack when a higher specificity L2 control plane/VLAN incident is present
+                                continue
+                            #If any specific impact label exists generic labels dominate dissapear
+                            if strong_specific_present and atk in {"PORT_SCAN", "STEALTH_SCAN", "AUTOMATED_TRAFFIC"}:
+                                ml = payload["record"].get("ml", {})
+                                sev = ml.get("severity") or "LOW"
+                                conf = float(ml.get("confidence", 0.0) or 0.0)
+                                if sev not in {"HIGH", "CRITICAL"} and conf < 0.75:
+                                    continue
+                            selected.append(payload["record"])
+
+                        def _sort_key(a: dict):
+                            ml = a.get("ml", {})
+                            atk = ml.get("attack_type", "ANOMALOUS_TRAFFIC")
+                            sev = ml.get("severity") or threat_level(ml.get("score"))
+                            conf = float(ml.get("confidence", 0.0) or 0.0)
+                            record_type = a.get("flow_record_type", "packet")
+                            specificity = {
+                                "STP_ROOT_ATTACK": 110,
+                                "VLAN_HOPPING": 108,
+                                "DHCP_STARVATION": 106,
+                                "MAC_FLOOD": 104,
+                                "ARP_POISONING": 100,
+                                "GRATUITOUS_ARP_STORM": 98,
+                                "SYN_FLOOD": 95,
+                                "XMAS_SCAN": 92,
+                                "DNS_TUNNELING": 88,
+                                "ICMP_TUNNELING": 86,
+                                "LOW_AND_SLOW_EXFIL": 82,
+                                "PORT_SCAN": 74,
+                                "STEALTH_SCAN": 70,
+                                "BEACONING": 68,
+                                "DNS_RECON": 60,
+                                "FRAGMENTATION_EVASION": 55,
+                                "HIGH_RATE_FLOOD": 50,
+                                "AUTOMATED_TRAFFIC": 35,
+                                "LOW_TTL": 25,
+                            }.get(atk, 0)
+                            sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}.get(sev, 0)
+                            rec_bonus = {"l2_summary": 4, "flow_summary": 3, "l2_packet": 1, "packet": 1}.get(record_type, 0)
+                            return (sev_rank, conf, rec_bonus, specificity)
+
+                        selected.sort(key=_sort_key, reverse=True)
+                        selected = selected[:12]
+
+                        attack_summary_lines = []
+                        if type_counts:
+                            attack_summary_lines.append("ATTACK TYPE SUMMARY:")
+                            for atk, n in type_counts.most_common(10):
+                                attack_summary_lines.append(f"- {atk}: {n}")
+
+                        anom_lines = []
+                        for a in selected:
+                            net_l = a.get("layers", {}).get("network", {})
+                            trans_l = a.get("layers", {}).get("transport", {})
+                            ml = a.get("ml", {})
+                            flow = a.get("flow", {})
+                            src = f"{net_l.get('src_ip')}:{trans_l.get('src_port')}"
+                            dst = f"{net_l.get('dst_ip')}:{trans_l.get('dst_port')}"
+                            score = ml.get("score", 0.0)
+                            level = ml.get("severity") or threat_level(score)
                             reasons = ml.get("reasons", [])
+                            attack_type = ml.get("attack_type", "ANOMALOUS_TRAFFIC")
+                            confidence = ml.get("confidence", "?")
+                            record_type = a.get("flow_record_type", "packet")
 
                             line = (
-                                f"[{level}] {src} → {dst} "
-                                f"score={score:.3f} proto={trans_l.get('protocol','?')}"
+                                f"[{level}] type={record_type} attack_type={attack_type} confidence={confidence} "
+                                f"{src} → {dst} score={score:.3f} proto={trans_l.get('protocol','?')}"
                             )
                             if reasons:
                                 line += " | " + "; ".join(reasons)
 
-                            #Include flow stats if they show scanning behavior
                             udp = flow.get("unique_dst_ports", 0)
                             if udp > 10:
                                 line += f" | unique_dst_ports={udp}"
+                            if flow.get("mac_claimed_ips"):
+                                line += f" | mac_claimed_ips={flow.get('mac_claimed_ips')}"
+                            if flow.get("arp_reply_count") is not None:
+                                line += f" | arp_reply_count={flow.get('arp_reply_count')}"
 
                             anom_lines.append(line)
 
-                        anomaly_block = (
-                            f"ANOMALY DETECTION RESULTS ({len(anomalies)} packets flagged):\n"
+                        pieces = []
+                        if attack_summary_lines:
+                            pieces.append("\n".join(attack_summary_lines))
+                        pieces.append(
+                            f"ANOMALY DETECTION RESULTS ({len(anomalies)} rows flagged, {len(selected)} representative rows shown):\n"
                             + "\n".join(f"- {l}" for l in anom_lines)
                         )
+                        anomaly_block = "\n\n".join(pieces)
+
                     else:
                         anomaly_block = "ANOMALY DETECTION RESULTS: No anomalies flagged in this capture."
 
@@ -821,15 +1034,12 @@ def main():
                 "You will receive NET SUMMARY, NETWORK CONTEXT, and optionally "
                 "ANOMALY DETECTION RESULTS.\n"
                 "Use NET SUMMARY as primary truth for protocols/endpoints/ports.\n"
-                "Use ANOMALY DETECTION RESULTS as primary truth for security questions — "
+                "Use ANOMALY DETECTION RESULTS as primary truth for security questions - "
                 "these are computed scores and reasons, not guesses.\n"
                 "When anomalies are present, report: which IPs are involved, "
                 "what the threat level is, what behavior was detected, and your "
                 "assessment of what likely happened.\n"
-                "Do not invent protocols or behaviors not present in the provided data.\n"
-                "192.168.1.7 is USER'S LOCAL IP ADDRESS.\n"
-                "192.168.1.50 is where THIS SERVICE is hosted.\n"
-                "192.168.1.125 is where THE MEMORY of THE SERVICE is hosted."
+                "Do not invent protocols or behaviors not present in the provided data."
             )
 
             messages = [{"role": "system", "content": base_instructions}]
@@ -1086,6 +1296,36 @@ def main():
                     print(f"Delete failed: {e}\n")
             except Exception as e:
                 print(f"Delete failed: {e}\n")
+            continue
+
+        # /netrescore <capture_id>
+        if cmd_l.startswith("/netrescore "):
+            capture_id = cmd[len("/netrescore "):].strip()
+            capture_id = strip_quotes(capture_id)
+
+            if not capture_id:
+                print("Usage: /netrescore <capture_id>\n")
+                continue
+
+            print(f"\nRescoring capture: {capture_id}...\n")
+            try:
+                r = requests.post(
+                    f"{BASE_URL}/net/rescore/{capture_id}",
+                    timeout=1200,
+                )
+                r.raise_for_status()
+                out = r.json()
+                print(
+                    f"{Fore.GREEN}Rescore complete.{Style.RESET_ALL}\n"
+                    f"Capture: {out.get('capture_id')}\n"
+                    f"Records rescored: {out.get('records_rescored')}\n"
+                    f"Anomalies found: {out.get('anomalies_found')}\n"
+                    f"Errors: {out.get('errors')}\n"
+                )
+            except Exception as e:
+                print(color_block(ERROR_BANNER, Fore.RED))
+                print(f"Rescore failed: {e}\n")
+
             continue
 
         #4) add
