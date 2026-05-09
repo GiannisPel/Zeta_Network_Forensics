@@ -48,7 +48,7 @@ def make_color_blocks(blocks=None, block_width: int = 4, gap: str = "") -> str:
     return gap.join(f"{b}{unit}{Style.RESET_ALL}" for b in blocks)
 
 def _bytes_to_human(n: int) -> str:
-    #Human-readable formatter
+    #Human readable formatter
     units = ["B", "KB", "MB", "GB", "TB", "PB"]
     f = float(n)
     for u in units:
@@ -97,7 +97,7 @@ def get_gpu_info_best_effort() -> str:
     - Else: WMIC (older but often works)
     - Else: 'Unknown'
     """
-    # 1) NVIDIA
+    #1) NVIDIA
     try:
         p = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"],
@@ -114,7 +114,7 @@ def get_gpu_info_best_effort() -> str:
     except Exception:
         pass
 
-    # 2)WMIC (works on many Windows setups)
+    #2)WMIC (works on many Windows setups)
     try:
         p = subprocess.run(
             ["wmic", "path", "win32_VideoController", "get", "Name,AdapterRAM", "/format:list"],
