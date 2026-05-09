@@ -144,33 +144,6 @@ This enables accurate detection of:
 | `/netstats`         | Capture summary         |
 | `/neofetch`         | Client/server telemetry |
 
-## 📥 Installation
-
-***Linux / Proxmox Server***
-
-    sudo apt update
-    sudo apt install tshark -y
-    
-    pip install fastapi uvicorn scapy faiss-cpu sentence-transformers joblib scikit-learn
-    
-    export NET_DATA_DIR="/var/lib/memory_service/net"
-    
-    uvicorn app:app --host 0.0.0.0 --port 8000
-
-***Windows Analyst Client***
-
-    ollama pull qwen2.5
-    
-    pip install requests pandas plotly colorama psutil
-
-  Update:
-  
-    BASE_URL = "http://YOUR_SERVER_IP:8000"
-
-  Run:
-
-    python chat_with_memory.py
-
 ## 🚀 Why Sairene Matters
 
 Traditional IDS systems detect loud attacks.
