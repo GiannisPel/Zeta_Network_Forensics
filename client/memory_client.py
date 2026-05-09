@@ -2,7 +2,7 @@ import requests
 import numpy as np
 import os
 
-#Local Ollama
+#Local Ollama (Windows machine)
 OLLAMA_HOST = "http://127.0.0.1:11434"
 EMBED_MODEL = "nomic-embed-text"
 
@@ -46,9 +46,8 @@ def net_retrieve(query_text: str, capture_id: str | None = None, top_k: int = 15
     return r.json().get("results", [])
 
 def net_import_pcap(file_path: str, timeout: float = 1800.0):
-    """
-    Upload .pcap/.pcapng to the server: POST /net/import_pcap (multipart form upload)
-    """
+    #POST /net/import_pcap (multipart form upload)
+
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -62,11 +61,18 @@ def net_import_pcap(file_path: str, timeout: float = 1800.0):
     return r.json()
 
 def net_stats(timeout: float = 30.0):
-    """
-    GET /net/stats
-    """
+    #GET /net/stats
     url = f"{MEMORY_API}/net/stats"
     r = requests.get(url, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
+
+
+
+def net_rescore(capture_id: str, timeout: float = 1800.0):
+    #POST /net/rescore/{capture_id}
+    #Reruns ML/anomaly classification on stored records without re-parsing, re-embedding, or touching FAISS.
+    r = requests.post(f"{MEMORY_API}/net/rescore/{capture_id}", timeout=(30, timeout))
     r.raise_for_status()
     return r.json()
 
